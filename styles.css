@@ -311,11 +311,11 @@ h2, h3, p { margin-top: 0; }
 @media (max-width: 560px) {
   .app-shell { padding: 0 8px; }
   .topbar { height: 60px; gap: 5px; }
-  .topbar .icon-button { width: 38px; height: 38px; }
-  .topbar .icon-button svg { width: 18px; height: 18px; }
+  .topbar .icon-button { width: 34px; height: 34px; }
+  .topbar .icon-button svg { width: 17px; height: 17px; }
   .header-actions { gap: 3px; }
   .story-filters { gap: 1px; padding: 2px; }
-  .story-filter { min-height: 36px; gap: 3px; padding: 6px 7px; font-size: 11px; }
+  .story-filter { min-height: 32px; gap: 2px; padding: 5px 5px; font-size: 10px; }
   .unread-count { min-width: 15px; height: 15px; padding: 0 3px; font-size: 9px; }
   .story-filter:focus-visible { outline-offset: 0; }
   main { min-height: calc(100vh - 68px); padding: 20px 0 42px; }
@@ -333,13 +333,24 @@ h2, h3, p { margin-top: 0; }
 }
 
 @media (max-width: 420px) {
-  .topbar { height: auto; min-height: 60px; flex-wrap: wrap; padding: 8px 0; }
-  .topbar > .menu-toggle { width: 42px; height: 42px; }
-  .topbar .header-actions { flex-basis: 100%; justify-content: flex-end; }
-  .topbar .header-actions .icon-button { width: 42px; height: 42px; }
-  .topbar .header-actions .icon-button svg { width: 19px; height: 19px; }
-  .story-filter { min-height: 40px; padding-inline: 9px; font-size: 12px; }
+  .topbar { height: 56px; min-height: 56px; flex-wrap: nowrap; gap: 3px; padding: 0; }
+  .topbar > .menu-toggle,
+  .topbar .header-actions .icon-button { width: 30px; height: 30px; }
+  .topbar .header-actions { flex: 0 0 auto; gap: 2px; }
+  .topbar .icon-button svg { width: 15px; height: 15px; }
+  .story-filter { min-height: 28px; padding: 4px 4px; font-size: 9px; }
+  .unread-count { min-width: 13px; height: 13px; padding: 0 2px; font-size: 8px; }
   .back-to-top { right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); width: 48px; height: 48px; }
+}
+
+@media (max-width: 360px) {
+  .topbar { gap: 2px; }
+  .topbar > .menu-toggle,
+  .topbar .header-actions .icon-button { width: 27px; height: 27px; }
+  .topbar .icon-button svg { width: 14px; height: 14px; }
+  .story-filters { gap: 0; padding: 1px; }
+  .story-filter { gap: 1px; padding-inline: 3px; font-size: 8px; }
+  .unread-count { min-width: 12px; height: 12px; font-size: 7px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
