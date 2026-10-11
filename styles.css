@@ -226,6 +226,10 @@ h2, h3, p { margin-top: 0; }
 .unread-count { display: inline-grid; min-width: 18px; height: 18px; place-items: center; padding: 0 4px; border-radius: 999px; color: var(--green-dark); background: var(--green-soft); font-size: 10px; line-height: 1; }
 .story-filter[aria-pressed="true"] .unread-count { color: var(--green-dark); background: white; }
 .story-list { display: grid; gap: 12px; }
+.load-more-stories { display: block; min-height: 42px; margin: 20px auto 0; padding: 0 18px; border: 1px solid var(--line); border-radius: 999px; color: var(--green-dark); background: var(--surface); font-size: 12px; font-weight: 700; cursor: pointer; }
+.load-more-stories:hover { border-color: #d6e2d8; background: #f5f9f5; }
+.load-more-stories:focus-visible { outline: 3px solid rgba(73, 116, 84, .24); outline-offset: 2px; }
+.load-more-stories[hidden] { display: none; }
 .story-card {
   position: relative;
   display: block;
@@ -449,4 +453,6 @@ h2, h3, p { margin-top: 0; }
 :root[data-theme="dark"] .story-filter[aria-pressed="true"] { color: #d7eadb; background: #293b2e; }
 :root[data-theme="dark"] .mark-all-read { color: var(--ink); border-color: var(--line); background: #252d27; }
 :root[data-theme="dark"] .mark-all-read:hover { border-color: #506153; background: #2e3931; }
+:root[data-theme="dark"] .load-more-stories { color: var(--ink); border-color: var(--line); background: #252d27; }
+:root[data-theme="dark"] .load-more-stories:hover { border-color: #506153; background: #2e3931; }
 :root[data-theme="dark"] .bookmark-toggle[aria-pressed="true"] { color: #b8d8bf; border-color: #405b46; background: #293b2e; }

@@ -4,6 +4,8 @@ const FEED_SEARCH_URL = "https://r.jina.ai/https://feedsearch.dev/api/v1/search?
 const RSSHUB_BASE_URL = "https://rsshub.gujiakai.top";
 const MAX_STORIES_PER_FEED = 40;
 const MAX_DISCOVERED_FEEDS_TO_TRY = 6;
+const STORY_RENDER_BATCH_SIZE = 60;
+const MAX_PARALLEL_FEED_REFRESHES = 5;
 
 const menuToggle = document.querySelector("#menu-toggle");
 const sidebar = document.querySelector("#feed-sidebar");
@@ -35,6 +37,7 @@ const importButton = document.querySelector("#import-button");
 const importFileInput = document.querySelector("#import-file");
 const closeDialogButton = document.querySelector("#close-dialog");
 const storyList = document.querySelector("#story-list");
+const loadMoreStoriesButton = document.querySelector("#load-more-stories");
 const markAllReadButton = document.querySelector("#mark-all-read");
 const storyFilterButtons = [...document.querySelectorAll(".story-filter")];
 const unreadCountElement = document.querySelector("#unread-count");
@@ -67,6 +70,7 @@ let selectedFolderId = "";
 let showingBookmarks = false;
 let collapsedFolderIds = new Set();
 let storyFilter = "unread";
+let storyRenderLimit = STORY_RENDER_BATCH_SIZE;
 let openStoryId = "";
 let swipeStart = null;
 let suppressCardClick = null;
@@ -372,9 +376,6 @@ function parseJsonFeed(data, sourceUrl) {
   const items = Array.isArray(data?.items)
     ? data.items.filter((item) => item && typeof item === "object")
     : [];
-  if (items.length === 0) {
-    throw new Error("No stories were found in this feed.");
-  }
 
   const titleValue = data.feed?.title || data.title;
   const title = typeof titleValue === "string" && titleValue.trim()
@@ -1003,15 +1004,17 @@ function createSidebarFolderGroup(folder, feeds) {
 }
 
 function render() {
-  const unreadCount = state.stories.filter((story) => story.read !== true).length;
-  unreadCountElement.textContent = String(unreadCount);
-  unreadCountElement.setAttribute("aria-label", `${unreadCount} unread ${unreadCount === 1 ? "story" : "stories"}`);
+  updateUnreadCount();
   sidebarFeedList.replaceChildren();
-  state.folders.forEach((folder) => {
-    const feeds = state.feeds.filter((feed) => feed.folderId === folder.id);
-    sidebarFeedList.append(createSidebarFolderGroup(folder, feeds));
+  const feedsByFolder = new Map(state.folders.map((folder) => [folder.id, []]));
+  const ungroupedFeeds = [];
+  state.feeds.forEach((feed) => {
+    const folderFeeds = feedsByFolder.get(feed.folderId);
+    (folderFeeds || ungroupedFeeds).push(feed);
   });
-  const ungroupedFeeds = state.feeds.filter((feed) => !state.folders.some((folder) => folder.id === feed.folderId));
+  state.folders.forEach((folder) => {
+    sidebarFeedList.append(createSidebarFolderGroup(folder, feedsByFolder.get(folder.id)));
+  });
   if (state.folders.length && ungroupedFeeds.length) {
     const ungroupedGroup = document.createElement("section");
     ungroupedGroup.className = "sidebar-feed-group";
@@ -1051,7 +1054,9 @@ function render() {
     return dateB - dateA;
   });
   storyList.replaceChildren();
-  for (const story of sortedStories) {
+  const storiesToRender = sortedStories.slice(0, storyRenderLimit);
+  const storyCards = document.createDocumentFragment();
+  for (const story of storiesToRender) {
     const card = document.createElement("article");
     card.className = "story-card";
     card.tabIndex = 0;
@@ -1175,8 +1180,14 @@ function render() {
     arrow.setAttribute("aria-hidden", "true");
     arrow.textContent = "›";
     card.append(arrow);
-    storyList.append(card);
+    storyCards.append(card);
   }
+  storyList.append(storyCards);
+  const remainingStories = sortedStories.length - storiesToRender.length;
+  loadMoreStoriesButton.hidden = remainingStories <= 0;
+  loadMoreStoriesButton.textContent = remainingStories > STORY_RENDER_BATCH_SIZE
+    ? `Load ${STORY_RENDER_BATCH_SIZE} more stories (${remainingStories} remaining)`
+    : `Load ${remainingStories} more stor${remainingStories === 1 ? "y" : "ies"}`;
 
   emptyState.hidden = sortedStories.length > 0;
   const emptyMessage = emptyState.querySelector("p");
@@ -1192,6 +1203,15 @@ function render() {
           : selectedFolderName
             ? `No stories in ${selectedFolderName} yet.`
           : "No stories yet.";
+}
+
+function updateUnreadCount() {
+  let unreadCount = 0;
+  state.stories.forEach((story) => {
+    if (story.read !== true) unreadCount += 1;
+  });
+  unreadCountElement.textContent = String(unreadCount);
+  unreadCountElement.setAttribute("aria-label", `${unreadCount} unread ${unreadCount === 1 ? "story" : "stories"}`);
 }
 
 function createBookmarkToggle(story) {
@@ -1222,12 +1242,13 @@ function toggleBookmark(story) {
   render();
 }
 
-function markStoryRead(story) {
+function markStoryRead(story, shouldRender = true) {
   const savedStory = state.stories.find((candidate) => candidate.id === story.id);
   if (!savedStory || savedStory.read === true) return;
   savedStory.read = true;
   saveState();
-  render();
+  if (shouldRender) render();
+  else updateUnreadCount();
 }
 
 function markAllUnreadAsRead() {
@@ -1256,6 +1277,7 @@ function markAllUnreadAsRead() {
 function selectStoryFilter(filter) {
   if (!["unread", "all", "read"].includes(filter)) return;
   storyFilter = filter;
+  storyRenderLimit = STORY_RENDER_BATCH_SIZE;
   render();
 }
 
@@ -1275,6 +1297,7 @@ function selectFeed(feedUrl) {
   showingBookmarks = false;
   selectedFeedUrl = feedUrl;
   selectedFolderId = "";
+  storyRenderLimit = STORY_RENDER_BATCH_SIZE;
   readerView.hidden = true;
   storiesView.hidden = false;
   setSidebarOpen(false);
@@ -1287,6 +1310,7 @@ function selectFolder(folderId) {
   showingBookmarks = false;
   selectedFeedUrl = "";
   selectedFolderId = folderId;
+  storyRenderLimit = STORY_RENDER_BATCH_SIZE;
   readerView.hidden = true;
   storiesView.hidden = false;
   setSidebarOpen(false);
@@ -1298,6 +1322,7 @@ function selectBookmarks() {
   showingBookmarks = true;
   selectedFeedUrl = "";
   selectedFolderId = "";
+  storyRenderLimit = STORY_RENDER_BATCH_SIZE;
   readerView.hidden = true;
   storiesView.hidden = false;
   setSidebarOpen(false);
@@ -1306,7 +1331,7 @@ function selectBookmarks() {
 }
 
 async function openStory(story) {
-  markStoryRead(story);
+  markStoryRead(story, false);
   const requestId = ++articleRequestId;
   openStoryId = story.id;
   updateReaderBookmark(story);
@@ -1428,7 +1453,6 @@ async function openStory(story) {
     if (!story.image && article.images.length) story.image = article.images[0];
     story.fullContentLoaded = true;
     saveState();
-    render();
     readerStatus.textContent = "";
     readerStatus.className = "status";
   } catch (error) {
@@ -1440,7 +1464,10 @@ async function openStory(story) {
 }
 
 async function fetchFullArticle(story) {
+  const hostname = new URL(story.link).hostname;
+  const isCnbetaArticle = hostname === "cnbeta.com.tw" || hostname.endsWith(".cnbeta.com.tw");
   const response = await fetch(`https://r.jina.ai/${story.link}`, {
+    headers: isCnbetaArticle ? { "X-Target-Selector": "#artibody" } : {},
     signal: AbortSignal.timeout(25000),
   });
   if (!response.ok) throw new Error(`Article request failed (${response.status}).`);
@@ -1449,10 +1476,11 @@ async function fetchFullArticle(story) {
   const contentStart = responseText.indexOf(marker);
   if (contentStart === -1) throw new Error("The article service returned unreadable content.");
 
-  const markdown = extractArticleMarkdown(
-    responseText.slice(contentStart + marker.length).trim(),
-    story.title,
-  );
+  const extractedMarkdown = responseText.slice(contentStart + marker.length).trim();
+  const markdown = isCnbetaArticle
+    ? trimArticleExtras(extractedMarkdown)
+    : extractArticleMarkdown(extractedMarkdown, story.title);
+  if (!markdown) throw new Error("The article service returned no article content.");
   const images = [...markdown.matchAll(/!\[([^\]]*)\]\((https?:\/\/[^)\s]+)(?:\s+"[^"]*")?\)/g)]
     .filter((match) => !/logo|avatar|headshot|icon/i.test(match[1]))
     .map((match) => safeImageUrl(match[2], story.link))
@@ -1495,7 +1523,21 @@ function trimArticleExtras(markdown) {
     "related articles",
     "related stories",
     "related news",
+    "latest news",
+    "hot comments",
+    "popular comments",
+    "latest comments",
     "you may also like",
+    "显示更多评论",
+    "显示更多評論",
+    "熱門評論",
+    "热门评论",
+    "最新评论",
+    "最新評論",
+    "相关文章",
+    "相關文章",
+    "最新资讯",
+    "最新資訊",
     "留言",
     "留言板",
     "评论",
@@ -1512,6 +1554,8 @@ function trimArticleExtras(markdown) {
     const isHeading = /^#{1,6}\s+/.test(trimmed) || /^\*\*[^*]+\*\*$/.test(trimmed);
     const sectionText = normalizeHeading(
       trimmed
+        .replace(/^>\s*/, "")
+        .replace(/^(?:[-*+]\s+|\d+[.)]\s+)/, "")
         .replace(/^#{1,6}\s+/, "")
         .replace(/^\*\*([^*]+)\*\*$/, "$1")
         .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1"),
@@ -1527,7 +1571,7 @@ function trimArticleExtras(markdown) {
   return content.join("\n").trim();
 }
 
-function appendArticleImage(src, alt) {
+function appendArticleImage(src, alt, container = readerContent) {
   const imageUrl = safeImageUrl(src);
   const key = imageKey(imageUrl);
   if (!imageUrl || !key || renderedArticleImages.has(key)) return;
@@ -1546,7 +1590,7 @@ function appendArticleImage(src, alt) {
   trigger.append(image);
   trigger.addEventListener("click", () => openImageZoom(imageUrl, alt, trigger));
   figure.append(trigger);
-  readerContent.append(figure);
+  container.append(figure);
 }
 
 function openImageZoom(src, alt, trigger) {
@@ -1562,16 +1606,30 @@ function closeImageZoom() {
   if (imageDialog.open) imageDialog.close();
 }
 
+function decodePercentEncodedText(value) {
+  return value.replace(/(?:%[0-9a-f]{2})+/gi, (encoded) => {
+    try {
+      const decoded = decodeURIComponent(encoded);
+      return /[^\u0000-\u007f]/.test(decoded) ? decoded : encoded;
+    } catch {
+      return encoded;
+    }
+  });
+}
+
 function appendPlainArticleText(value) {
+  const paragraphs = document.createDocumentFragment();
   for (const paragraph of value.split(/\n{2,}/)) {
     if (!paragraph.trim()) continue;
     const element = document.createElement("p");
-    element.textContent = paragraph;
-    readerContent.append(element);
+    element.textContent = decodePercentEncodedText(paragraph);
+    paragraphs.append(element);
   }
+  readerContent.append(paragraphs);
 }
 
 function appendMarkdownArticle(markdown) {
+  const article = document.createDocumentFragment();
   for (const block of markdown.split(/\n\s*\n/)) {
     const trimmedBlock = block.trim();
     if (!trimmedBlock) continue;
@@ -1579,21 +1637,24 @@ function appendMarkdownArticle(markdown) {
     const headingLevel = (firstLine.match(/^#{1,3}\s/) || [""])[0].length;
     const imageMatches = [...trimmedBlock.matchAll(/!\[([^\]]*)\]\((https?:\/\/[^)\s]+)(?:\s+"[^"]*")?\)/g)];
     for (const match of imageMatches) {
-      if (!/logo|avatar|headshot|icon/i.test(match[1])) appendArticleImage(match[2], match[1]);
+      if (!/logo|avatar|headshot|icon/i.test(match[1])) {
+        appendArticleImage(match[2], match[1], article);
+      }
     }
-    const text = trimmedBlock
+    const text = decodePercentEncodedText(trimmedBlock
       .replace(/!\[([^\]]*)\]\((https?:\/\/[^)\s]+)(?:\s+"[^"]*")?\)/g, "")
       .replace(/\[([^\]]*)\]\((https?:\/\/[^)\s]+)(?:\s+"[^"]*")?\)/g, "$1")
       .replace(/^#{1,6}\s+/gm, "")
       .replace(/^\s*(?:[-*+]|\d+\.)\s+/gm, "")
-      .replace(/[*_~`]/g, "")
+      .replace(/[*_~`]/g, ""))
       .replace(/\s+/g, " ")
       .trim();
     if (!text) continue;
     const element = document.createElement(headingLevel ? "h3" : "p");
     element.textContent = text;
-    readerContent.append(element);
+    article.append(element);
   }
+  readerContent.append(article);
 }
 
 function closeStory() {
@@ -1601,6 +1662,7 @@ function closeStory() {
   openStoryId = "";
   readerView.hidden = true;
   storiesView.hidden = false;
+  render();
   window.scrollTo(0, 0);
 }
 
@@ -1664,12 +1726,21 @@ async function refreshFeeds() {
   refreshButton.classList.add("is-refreshing");
   showStatus("Refreshing your feeds…");
   try {
-    const results = await Promise.allSettled(refreshableFeeds.map((feed) => fetchFeed(feed.url)));
     const failures = [];
-    for (const result of results) {
-      if (result.status === "fulfilled") {
+    const emptyFeeds = [];
+    const previousStories = new Map(state.stories.map((story) => [story.id, story]));
+    const successfulUpdates = new Map();
+    for (let start = 0; start < refreshableFeeds.length; start += MAX_PARALLEL_FEED_REFRESHES) {
+      const batch = refreshableFeeds.slice(start, start + MAX_PARALLEL_FEED_REFRESHES);
+      showStatus(`Refreshing feeds ${Math.min(start + batch.length, refreshableFeeds.length)} of ${refreshableFeeds.length}…`);
+      const results = await Promise.allSettled(batch.map((feed) => fetchFeed(feed.url)));
+      results.forEach((result) => {
+        if (result.status === "rejected") {
+          failures.push(result.reason);
+          return;
+        }
         const { feed, stories } = result.value;
-        const previousStories = new Map(state.stories.map((story) => [story.id, story]));
+        if (stories.length === 0) emptyFeeds.push(feed.title);
         const refreshedStories = stories.map((story) => {
           const previous = previousStories.get(story.id);
           if (!previous) return story;
@@ -1683,33 +1754,45 @@ async function refreshFeeds() {
             fullContentLoaded: Boolean(previous.fullContentMarkdown),
           };
         });
-        state.feeds = state.feeds.map((saved) => saved.url === feed.url
-          ? { ...feed, folderId: saved.folderId || "" }
-          : saved);
-        const refreshedIds = new Set(refreshedStories.map((story) => story.id));
-        const retainedStories = state.stories.filter((story) =>
-          story.feedUrl === feed.url &&
-          !refreshedIds.has(story.id) &&
-          !isExpiredReadStory(story),
-        );
-        state.stories = [
-          ...state.stories.filter((story) => story.feedUrl !== feed.url),
-          ...retainedStories,
-          ...refreshedStories,
-        ];
-      } else {
-        failures.push(result.reason);
-      }
+        successfulUpdates.set(feed.url, { feed, stories: refreshedStories });
+      });
     }
-    state.stories = state.stories.filter((story) => !isExpiredReadStory(story));
+
+    state.feeds = state.feeds.map((saved) => {
+      const update = successfulUpdates.get(saved.url);
+      return update ? { ...update.feed, folderId: saved.folderId || "" } : saved;
+    });
+    const refreshedIdsByFeed = new Map(
+      [...successfulUpdates].map(([url, update]) => [
+        url,
+        new Set(update.stories.map((story) => story.id)),
+      ]),
+    );
+    const refreshedStateStories = state.stories.filter((story) => {
+      if (isExpiredReadStory(story)) return false;
+      const refreshedIds = refreshedIdsByFeed.get(story.feedUrl);
+      return !refreshedIds || !refreshedIds.has(story.id);
+    });
+    successfulUpdates.forEach((update) => refreshedStateStories.push(...update.stories));
+    state.stories = refreshedStateStories;
     saveState();
     render();
+    const statusMessages = [];
+    if (emptyFeeds.length) {
+      statusMessages.push(
+        `No articles were updated for ${emptyFeeds.length} feed${emptyFeeds.length === 1 ? "" : "s"} because they returned no articles; saved stories were kept.`,
+      );
+    }
     if (failures.length) {
       failures.forEach((error) => console.error("Could not refresh a feed.", error));
-      showStatus(`Updated available feeds. ${failures.length} feed${failures.length === 1 ? "" : "s"} could not be refreshed; saved stories are still shown.`, "error");
-    } else {
-      showStatus("All feeds are up to date.", "success");
+      statusMessages.push(
+        `${failures.length} feed${failures.length === 1 ? "" : "s"} could not be refreshed; saved stories are still shown.`,
+      );
     }
+    showStatus(
+      statusMessages.length ? statusMessages.join(" ") : "All feeds are up to date.",
+      failures.length ? "error" : "success",
+    );
   } finally {
     isRefreshing = false;
     refreshButton.disabled = false;
@@ -1788,6 +1871,10 @@ storyFilterButtons.forEach((button) => {
   button.addEventListener("click", () => selectStoryFilter(button.dataset.storyFilter));
 });
 markAllReadButton.addEventListener("click", markAllUnreadAsRead);
+loadMoreStoriesButton.addEventListener("click", () => {
+  storyRenderLimit += STORY_RENDER_BATCH_SIZE;
+  render();
+});
 exportButton.addEventListener("click", exportOpml);
 importButton.addEventListener("click", () => importFileInput.click());
 importFileInput.addEventListener("change", () => importOpml(importFileInput.files[0]));
