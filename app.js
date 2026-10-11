@@ -39,6 +39,7 @@ const markAllReadButton = document.querySelector("#mark-all-read");
 const storyFilterButtons = [...document.querySelectorAll(".story-filter")];
 const unreadCountElement = document.querySelector("#unread-count");
 const emptyState = document.querySelector("#empty-state");
+const backToTopButton = document.querySelector("#back-to-top");
 const storiesView = document.querySelector("#stories-view");
 const readerView = document.querySelector("#reader-view");
 const backButton = document.querySelector("#back-button");
@@ -57,6 +58,7 @@ const pullRefreshLabel = document.querySelector("#pull-refresh-label");
 const themeColorMeta = document.querySelector('meta[name="theme-color"]');
 
 const PULL_REFRESH_THRESHOLD = 72;
+const BACK_TO_TOP_THRESHOLD = 320;
 let state = loadState();
 document.documentElement.dataset.theme = state.theme;
 let isRefreshing = false;
@@ -1724,6 +1726,10 @@ function resetPullRefresh() {
   pullRefreshLabel.textContent = "Pull to refresh";
 }
 
+function updateBackToTopButton() {
+  backToTopButton.hidden = window.scrollY <= BACK_TO_TOP_THRESHOLD;
+}
+
 function handlePullStart(event) {
   if (event.touches.length !== 1 || window.scrollY > 0 || readerView.hidden === false ||
     addDialog.open || imageDialog.open || sidebar.classList.contains("is-open") ||
@@ -1786,6 +1792,10 @@ exportButton.addEventListener("click", exportOpml);
 importButton.addEventListener("click", () => importFileInput.click());
 importFileInput.addEventListener("change", () => importOpml(importFileInput.files[0]));
 refreshButton.addEventListener("click", refreshFeeds);
+backToTopButton.addEventListener("click", () => {
+  window.scrollTo({ top: 0, behavior: "smooth" });
+});
+window.addEventListener("scroll", updateBackToTopButton, { passive: true });
 document.addEventListener("touchstart", handlePullStart, { passive: true });
 document.addEventListener("touchmove", handlePullMove, { passive: false });
 document.addEventListener("touchend", handlePullEnd, { passive: true });
@@ -1870,6 +1880,7 @@ window.addEventListener("offline", () => {
 
 render();
 updateThemeToggle();
+updateBackToTopButton();
 if (navigator.onLine && state.feeds.some((feed) => validFeedUrl(feed.url))) refreshFeeds();
 if ("serviceWorker" in navigator && location.protocol !== "file:") {
   window.addEventListener("load", () => {
