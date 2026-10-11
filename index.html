@@ -28,13 +28,13 @@
           <button class="icon-button data-action" id="refresh-button" type="button" aria-label="Refresh feeds" title="Refresh feeds">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9A7 7 0 0 1 18 6l2 2M4 16l2 2a7 7 0 0 0 12.4-3"/></svg>
           </button>
-          <button class="icon-button data-action" id="export-button" type="button" aria-label="Export JSON backup" title="Export JSON backup">
+          <button class="icon-button data-action" id="export-button" type="button" aria-label="Export OPML subscriptions" title="Export OPML subscriptions">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>
           </button>
-          <button class="icon-button data-action" id="import-button" type="button" aria-label="Import JSON backup" title="Import JSON backup">
+          <button class="icon-button data-action" id="import-button" type="button" aria-label="Import OPML subscriptions" title="Import OPML subscriptions">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9v12m0 0l4.5-4.5M12 21l-4.5-4.5M5 10V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v5"/></svg>
           </button>
-          <input id="import-file" type="file" accept=".json,application/json" hidden>
+          <input id="import-file" type="file" accept=".opml,.xml,text/xml,application/xml" hidden>
           <button class="icon-button add-toggle" id="add-toggle" type="button" aria-label="Add a feed" aria-haspopup="dialog" aria-controls="add-feed-dialog" title="Add a feed">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
           </button>
@@ -139,7 +139,10 @@
         </section>
 
         <section id="stories-view" class="stories-section" aria-label="Stories">
-          <div id="status" class="status" role="status" aria-live="polite"></div>
+          <div class="stories-toolbar">
+            <div id="status" class="status" role="status" aria-live="polite"></div>
+            <button id="mark-all-read" class="mark-all-read" type="button" title="Mark unread stories in this view as read" hidden>Mark all read</button>
+          </div>
           <div id="story-list" class="story-list"></div>
           <div id="empty-state" class="empty-state">
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 19a1 1 0 1 0 0-2 1 1 0 0 0 0 2ZM4 11a9 9 0 0 1 9 9M4 5a15 15 0 0 1 15 15" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>

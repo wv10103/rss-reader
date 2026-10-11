@@ -35,6 +35,7 @@ const importButton = document.querySelector("#import-button");
 const importFileInput = document.querySelector("#import-file");
 const closeDialogButton = document.querySelector("#close-dialog");
 const storyList = document.querySelector("#story-list");
+const markAllReadButton = document.querySelector("#mark-all-read");
 const storyFilterButtons = [...document.querySelectorAll(".story-filter")];
 const unreadCountElement = document.querySelector("#unread-count");
 const emptyState = document.querySelector("#empty-state");
@@ -124,92 +125,133 @@ function saveState() {
   }
 }
 
-function exportBackup() {
-  const backup = {
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    feeds: state.feeds,
-    stories: state.stories,
-    folders: state.folders,
-    theme: state.theme,
-    retentionMonths: state.retentionMonths,
-    retentionConfigured: state.retentionConfigured,
-  };
-  const blobUrl = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], {
-    type: "application/json",
-  }));
+function escapeXmlAttribute(value) {
+  return value.replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&apos;",
+  })[character]);
+}
+
+function exportOpml() {
+  const feedsByFolder = new Map(state.folders.map((folder) => [folder.id, []]));
+  const ungroupedFeeds = [];
+  state.feeds.forEach((feed) => {
+    const folderFeeds = feedsByFolder.get(feed.folderId);
+    (folderFeeds || ungroupedFeeds).push(feed);
+  });
+  const feedOutline = (feed) =>
+    `      <outline type="rss" text="${escapeXmlAttribute(feed.title)}" title="${escapeXmlAttribute(feed.title)}" xmlUrl="${escapeXmlAttribute(feed.url)}" />`;
+  const folderOutlines = state.folders.map((folder) => [
+    `    <outline text="${escapeXmlAttribute(folder.name)}" title="${escapeXmlAttribute(folder.name)}">`,
+    ...feedsByFolder.get(folder.id).map(feedOutline),
+    "    </outline>",
+  ].join("\n"));
+  const outlines = [
+    ...folderOutlines,
+    ...ungroupedFeeds.map(feedOutline),
+  ];
+  const opml = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<opml version="2.0">',
+    "  <head>",
+    "    <title>Little RSS Reader subscriptions</title>",
+    `    <dateCreated>${new Date().toUTCString()}</dateCreated>`,
+    "  </head>",
+    "  <body>",
+    ...outlines,
+    "  </body>",
+    "</opml>",
+  ].join("\n");
+  const blobUrl = URL.createObjectURL(new Blob([opml], { type: "text/x-opml;charset=utf-8" }));
   const link = document.createElement("a");
   link.href = blobUrl;
-  link.download = `rss-reader-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  link.download = `rss-reader-subscriptions-${new Date().toISOString().slice(0, 10)}.opml`;
   link.click();
   setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-  showStatus("JSON backup downloaded.", "success");
+  showStatus(`Exported ${state.feeds.length} feed${state.feeds.length === 1 ? "" : "s"} as OPML.`, "success");
 }
 
-function parseBackup(value) {
-  let backup;
-  try {
-    backup = JSON.parse(value);
-  } catch {
-    throw new Error("The selected file is not valid JSON.");
+function parseOpml(value) {
+  const documentFromOpml = new DOMParser().parseFromString(value, "application/xml");
+  if (documentFromOpml.querySelector("parsererror") ||
+    documentFromOpml.documentElement?.tagName.toLowerCase() !== "opml") {
+    throw new Error("The selected file is not valid OPML.");
   }
-  if (!backup || typeof backup !== "object" || Array.isArray(backup) ||
-    backup.version !== 1 || !Array.isArray(backup.feeds) || !Array.isArray(backup.stories)) {
-    throw new Error("This file is not a supported RSS Reader backup.");
-  }
-  if (!backup.feeds.every(isValidSavedFeed) || !backup.stories.every(isValidSavedStory)) {
-    throw new Error("The backup contains an invalid feed or story.");
-  }
-  if (backup.folders !== undefined &&
-    (!Array.isArray(backup.folders) || !backup.folders.every(isValidFolder))) {
-    throw new Error("The backup contains an invalid folder.");
-  }
-  return {
-    feeds: backup.feeds,
-    stories: backup.stories,
-    folders: backup.folders || [],
-    retentionMonths: isValidRetentionMonths(backup.retentionMonths) ? backup.retentionMonths : state.retentionMonths,
-    retentionConfigured: backup.retentionConfigured === true,
-  };
+  const body = documentFromOpml.querySelector("opml > body");
+  if (!body) throw new Error("The OPML file does not contain a subscription list.");
+
+  const feeds = [];
+  const outlines = [...body.querySelectorAll("outline")];
+  const feedOutlines = outlines.filter((outline) =>
+    outline.hasAttribute("xmlUrl") || outline.hasAttribute("xmlurl"),
+  );
+  feedOutlines.forEach((outline) => {
+    const url = outline.getAttribute("xmlUrl") || outline.getAttribute("xmlurl") || "";
+    if (!validFeedUrl(url)) return;
+    const title = outline.getAttribute("title") || outline.getAttribute("text") || url;
+    const parentFolder = outline.parentElement?.closest("outline");
+    const folderName = parentFolder
+      ? parentFolder.getAttribute("title") || parentFolder.getAttribute("text") || ""
+      : "";
+    feeds.push({ url, title, folderName });
+  });
+  if (!feeds.length) throw new Error("No valid RSS subscriptions were found in the OPML file.");
+  const folderNames = outlines
+    .filter((outline) => !outline.hasAttribute("xmlUrl") && !outline.hasAttribute("xmlurl"))
+    .filter((outline) => {
+      const childOutlines = [...outline.children].filter((child) => child.tagName.toLowerCase() === "outline");
+      return childOutlines.length === 0 || childOutlines.some((child) =>
+        child.hasAttribute("xmlUrl") || child.hasAttribute("xmlurl"),
+      );
+    })
+    .map((outline) => outline.getAttribute("title") || outline.getAttribute("text") || "")
+    .filter(Boolean);
+  return { feeds, folderNames };
 }
 
-async function importBackup(file) {
+async function importOpml(file) {
   if (!file) return;
   try {
-    const imported = parseBackup(await file.text());
-    const folders = [...new Map(
-      [...state.folders, ...imported.folders].map((folder) => [folder.id, folder]),
-    ).values()];
-    const folderIds = new Set(folders.map((folder) => folder.id));
-    const currentFoldersByFeedUrl = new Map(state.feeds.map((feed) => [feed.url, feed.folderId]));
-    const mergedState = {
-      feeds: [...new Map(
-        [...state.feeds, ...imported.feeds].map((feed) => [feed.url, {
-          ...feed,
-          folderId: Object.prototype.hasOwnProperty.call(feed, "folderId")
-            ? folderIds.has(feed.folderId) ? feed.folderId : ""
-            : currentFoldersByFeedUrl.get(feed.url) || "",
-        }]),
-      ).values()],
-      stories: [...new Map(
-        [...state.stories, ...imported.stories].map((story) => [story.id, story]),
-      ).values()],
-      folders,
-      theme: state.theme,
-      retentionMonths: state.retentionMonths,
-      retentionConfigured: state.retentionConfigured,
+    const imported = parseOpml(await file.text());
+    const folders = [...state.folders];
+    const folderIdsByName = new Map(folders.map((folder) => [folder.name.toLocaleLowerCase(), folder.id]));
+    const existingFeedUrls = new Set(state.feeds.map((feed) => feed.url));
+    const newFeeds = [];
+    const ensureFolder = (name) => {
+      const normalizedName = name.toLocaleLowerCase();
+      let folderId = folderIdsByName.get(normalizedName) || "";
+      if (!folderId) {
+        folderId = `folder-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        folders.push({ id: folderId, name });
+        folderIdsByName.set(normalizedName, folderId);
+      }
+      return folderId;
     };
+    imported.folderNames.forEach(ensureFolder);
+    imported.feeds.forEach((feed) => {
+      if (existingFeedUrls.has(feed.url)) return;
+      const folderId = feed.folderName ? ensureFolder(feed.folderName) : "";
+      newFeeds.push({ url: feed.url, title: feed.title, folderId });
+      existingFeedUrls.add(feed.url);
+    });
+    const mergedState = { ...state, feeds: [...state.feeds, ...newFeeds], folders };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedState));
     } catch (error) {
-      console.error("Could not save imported backup.", error);
-      throw new Error("The backup could not be saved. Check available browser storage.");
+      console.error("Could not save imported OPML subscriptions.", error);
+      throw new Error("The subscriptions could not be saved. Check available browser storage.");
     }
     state = mergedState;
     render();
-    showStatus(`Imported ${imported.feeds.length} feed${imported.feeds.length === 1 ? "" : "s"} and ${imported.stories.length} stor${imported.stories.length === 1 ? "y" : "ies"}.`, "success");
+    const skippedCount = imported.feeds.length - newFeeds.length;
+    const resultMessage = `Imported ${newFeeds.length} feed${newFeeds.length === 1 ? "" : "s"}` +
+      (skippedCount ? `; skipped ${skippedCount} already saved.` : ".");
+    showStatus(resultMessage, "success");
   } catch (error) {
-    console.error("Could not import JSON backup.", error);
+    console.error("Could not import OPML subscriptions.", error);
     showStatus(error.message, "error");
   } finally {
     importFileInput.value = "";
@@ -993,6 +1035,8 @@ function render() {
       : folderFeedUrls
         ? state.stories.filter((story) => folderFeedUrls.has(story.feedUrl))
         : state.stories;
+  const unreadStoriesInView = storiesByView.filter((story) => story.read !== true);
+  markAllReadButton.hidden = unreadStoriesInView.length === 0;
   const visibleStories = storiesByView.filter((story) =>
     storyFilter === "all" || (storyFilter === "read" ? story.read === true : story.read !== true),
   );
@@ -1184,6 +1228,29 @@ function markStoryRead(story) {
   render();
 }
 
+function markAllUnreadAsRead() {
+  const folderFeedUrls = selectedFolderId
+    ? new Set(state.feeds.filter((feed) => feed.folderId === selectedFolderId).map((feed) => feed.url))
+    : null;
+  const unreadStories = state.stories.filter((story) =>
+    story.read !== true &&
+    (showingBookmarks
+      ? story.bookmarked
+      : selectedFeedUrl
+        ? story.feedUrl === selectedFeedUrl
+        : folderFeedUrls
+          ? folderFeedUrls.has(story.feedUrl)
+          : true),
+  );
+  if (!unreadStories.length) return;
+  unreadStories.forEach((story) => {
+    story.read = true;
+  });
+  saveState();
+  render();
+  showStatus(`Marked ${unreadStories.length} unread stor${unreadStories.length === 1 ? "y" : "ies"} as read.`, "success");
+}
+
 function selectStoryFilter(filter) {
   if (!["unread", "all", "read"].includes(filter)) return;
   storyFilter = filter;
@@ -1329,8 +1396,13 @@ async function openStory(story) {
   }
 
   if (story.fullContentMarkdown) {
+    const articleMarkdown = trimArticleExtras(story.fullContentMarkdown);
+    if (articleMarkdown !== story.fullContentMarkdown) {
+      story.fullContentMarkdown = articleMarkdown;
+      saveState();
+    }
     appendVideoDownloadLink(readerContent, story);
-    appendMarkdownArticle(story.fullContentMarkdown);
+    appendMarkdownArticle(articleMarkdown);
     if (renderedArticleImages.size === 0 && story.image) appendArticleImage(story.image, story.title);
     readerStatus.textContent = "";
     readerStatus.className = "status";
@@ -1406,9 +1478,48 @@ function extractArticleMarkdown(markdown, title) {
   });
   if (titleIndex === -1) throw new Error("Article heading was not found in the page.");
 
+  return trimArticleExtras(lines.slice(titleIndex + 1).join("\n"));
+}
+
+function trimArticleExtras(markdown) {
+  const lines = markdown.split(/\r?\n/);
+  const sectionPrefixes = [
+    "comments",
+    "comment",
+    "leave a comment",
+    "post a comment",
+    "discussion",
+    "responses",
+    "related articles",
+    "related stories",
+    "related news",
+    "you may also like",
+    "留言",
+    "留言板",
+    "评论",
+    "評論",
+    "相关报道",
+    "相关新闻",
+    "相關新聞",
+    "댓글",
+    "コメント",
+  ];
   const content = [];
-  for (const line of lines.slice(titleIndex + 1)) {
-    if (/^#{1,3}\s*(Was this page helpful|Related (articles|stories)|You may also like|National Aeronautics and Space Administration|Follow NASA)\b/i.test(line.trim())) break;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const isHeading = /^#{1,6}\s+/.test(trimmed) || /^\*\*[^*]+\*\*$/.test(trimmed);
+    const sectionText = normalizeHeading(
+      trimmed
+        .replace(/^#{1,6}\s+/, "")
+        .replace(/^\*\*([^*]+)\*\*$/, "$1")
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1"),
+    );
+    const isShortSectionLabel = trimmed.length <= 80 && !/[.!?。！？]/.test(trimmed);
+    if ((isHeading || isShortSectionLabel) &&
+      (sectionPrefixes.some((prefix) => sectionText.startsWith(normalizeHeading(prefix))) ||
+        /^(was this page helpful|national aeronautics and space administration|follow nasa)/i.test(sectionText))) {
+      break;
+    }
     content.push(line);
   }
   return content.join("\n").trim();
@@ -1670,9 +1781,10 @@ form.addEventListener("submit", (event) => {
 storyFilterButtons.forEach((button) => {
   button.addEventListener("click", () => selectStoryFilter(button.dataset.storyFilter));
 });
-exportButton.addEventListener("click", exportBackup);
+markAllReadButton.addEventListener("click", markAllUnreadAsRead);
+exportButton.addEventListener("click", exportOpml);
 importButton.addEventListener("click", () => importFileInput.click());
-importFileInput.addEventListener("change", () => importBackup(importFileInput.files[0]));
+importFileInput.addEventListener("change", () => importOpml(importFileInput.files[0]));
 refreshButton.addEventListener("click", refreshFeeds);
 document.addEventListener("touchstart", handlePullStart, { passive: true });
 document.addEventListener("touchmove", handlePullMove, { passive: false });
