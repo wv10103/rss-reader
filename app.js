@@ -54,6 +54,7 @@ const readerTitle = document.querySelector("#reader-title");
 const readerStatus = document.querySelector("#reader-status");
 const readerContent = document.querySelector("#reader-content");
 const readerBookmarkToggle = document.querySelector("#reader-bookmark-toggle");
+const readerOpenLink = document.querySelector("#reader-open-link");
 const imageDialog = document.querySelector("#image-dialog");
 const closeImageDialogButton = document.querySelector("#close-image-dialog");
 const zoomedImage = document.querySelector("#zoomed-image");
@@ -1362,6 +1363,15 @@ function updateReaderBookmark(story) {
   readerBookmarkToggle.querySelector("span").textContent = story.bookmarked ? "Bookmarked" : "Bookmark";
 }
 
+function updateReaderOpenLink(story) {
+  const linkUrl = validFeedUrl(story.link) ? story.link : "";
+  readerOpenLink.hidden = !linkUrl;
+  if (linkUrl) readerOpenLink.href = linkUrl;
+  else readerOpenLink.removeAttribute("href");
+  readerOpenLink.title = linkUrl ? `Open “${story.title}” in browser` : "";
+  readerOpenLink.setAttribute("aria-label", `Open ${story.title} in browser`);
+}
+
 function toggleBookmark(story) {
   const savedStory = state.stories.find((candidate) => candidate.id === story.id);
   if (!savedStory) return;
@@ -1498,6 +1508,7 @@ async function openStory(story) {
   const requestId = ++articleRequestId;
   openStoryId = story.id;
   updateReaderBookmark(story);
+  updateReaderOpenLink(story);
   readerMeta.replaceChildren();
   const source = document.createElement("span");
   source.className = "story-source";

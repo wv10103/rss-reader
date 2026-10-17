@@ -285,9 +285,14 @@ h2, h3, p { margin-top: 0; }
 .story-card { touch-action: pan-y; }
 
 .reader-view { max-width: 680px; margin: 0 auto; padding: 8px 0 40px; }
-.reader-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-bottom: 31px; }
+.reader-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px; margin-bottom: 31px; }
 .reader-bookmark-toggle { display: flex; width: auto; min-height: 38px; align-items: center; gap: 8px; padding: 0 12px; border-radius: 999px; font-size: 12px; font-weight: 600; }
 .reader-bookmark-toggle svg { width: 17px; height: 17px; }
+.reader-open-link { display: inline-flex; min-height: 38px; align-items: center; gap: 8px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px; color: var(--green-dark); background: var(--surface); font-size: 12px; font-weight: 700; text-decoration: none; transition: color .16s, background .16s, border-color .16s; }
+.reader-open-link:hover { background: var(--green-soft); }
+.reader-open-link:focus-visible { outline: 3px solid rgba(73, 116, 84, .24); outline-offset: 2px; }
+.reader-open-link svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
+.reader-open-link[hidden] { display: none; }
 .reader-view article { padding: 4px 0; }
 .reader-view .story-meta { margin-bottom: 15px; }
 .reader-title { margin: 0 0 24px; font: 800 clamp(28px, 5vw, 42px)/1.18 "Manrope", sans-serif; letter-spacing: -1.4px; }
@@ -414,6 +419,8 @@ h2, h3, p { margin-top: 0; }
 :root[data-theme="dark"] .settings-action-button { color: #c0e0c7; border-color: var(--line); background: #252d27; }
 :root[data-theme="dark"] .settings-theme-toggle:hover,
 :root[data-theme="dark"] .settings-action-button:hover { background: #2e3931; }
+:root[data-theme="dark"] .reader-open-link { color: #c0e0c7; border-color: var(--line); background: #252d27; }
+:root[data-theme="dark"] .reader-open-link:hover { background: #2e3931; }
 :root[data-theme="dark"] .sidebar-heading,
 :root[data-theme="dark"] .dialog-heading h2,
 :root[data-theme="dark"] .reader-content h3 { color: var(--ink); }
