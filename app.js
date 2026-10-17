@@ -6,6 +6,7 @@ const MAX_STORIES_PER_FEED = 40;
 const MAX_DISCOVERED_FEEDS_TO_TRY = 6;
 const STORY_RENDER_BATCH_SIZE = 60;
 const MAX_PARALLEL_FEED_REFRESHES = 5;
+const APP_VIEW_HISTORY_KEY = "littleReaderView";
 
 const menuToggle = document.querySelector("#menu-toggle");
 const sidebar = document.querySelector("#feed-sidebar");
@@ -23,11 +24,11 @@ const cancelAddFolderButton = document.querySelector("#cancel-add-folder");
 const newFolderNameInput = document.querySelector("#new-folder-name");
 const folderCreateStatus = document.querySelector("#folder-create-status");
 const addDialog = document.querySelector("#add-feed-dialog");
-const settingsDialog = document.querySelector("#settings-dialog");
+const settingsView = document.querySelector("#settings-view");
+const settingsStatus = document.querySelector("#settings-status");
 const retentionSelect = document.querySelector("#retention-months");
 const retentionPreview = document.querySelector("#retention-preview");
 const saveSettingsButton = document.querySelector("#save-settings");
-const closeSettingsButton = document.querySelector("#close-settings");
 const form = document.querySelector("#add-feed-form");
 const feedInput = document.querySelector("#feed-url");
 const addToggle = document.querySelector("#add-toggle");
@@ -39,7 +40,7 @@ const closeDialogButton = document.querySelector("#close-dialog");
 const storyList = document.querySelector("#story-list");
 const loadMoreStoriesButton = document.querySelector("#load-more-stories");
 const markAllReadButton = document.querySelector("#mark-all-read");
-const storyFilterButtons = [...document.querySelectorAll(".story-filter")];
+const storyFilterSelect = document.querySelector("#story-filter");
 const unreadCountElement = document.querySelector("#unread-count");
 const emptyState = document.querySelector("#empty-state");
 const backToTopButton = document.querySelector("#back-to-top");
@@ -68,6 +69,9 @@ let isRefreshing = false;
 let selectedFeedUrl = "";
 let selectedFolderId = "";
 let showingBookmarks = false;
+let settingsPageOpen = false;
+let activeAppViewHistoryId = "";
+let unreadStoriesInCurrentView = 0;
 let collapsedFolderIds = new Set();
 let storyFilter = "unread";
 let storyRenderLimit = STORY_RENDER_BATCH_SIZE;
@@ -79,6 +83,9 @@ let pullDistance = 0;
 let articleRequestId = 0;
 let renderedArticleImages = new Set();
 let lastImageTrigger = null;
+let storyListScrollPosition = 0;
+let statusHideTimeout = 0;
+let timedStatusTarget = null;
 
 function loadState() {
   try {
@@ -265,12 +272,42 @@ async function importOpml(file) {
 }
 
 function showStatus(message, type = "") {
-  statusElement.textContent = message;
-  statusElement.className = `status${type ? ` ${type}` : ""}`;
+  if (type !== "error") return;
   if (addDialog.open) {
     dialogStatusElement.textContent = message;
     dialogStatusElement.className = `status${type ? ` ${type}` : ""}`;
+    return;
   }
+  const target = settingsPageOpen ? settingsStatus : statusElement;
+  setTimedStatus(target, message, type);
+}
+
+function setTimedStatus(target, message, type) {
+  clearTimeout(statusHideTimeout);
+  if (timedStatusTarget && timedStatusTarget !== target) {
+    timedStatusTarget.textContent = "";
+    timedStatusTarget.className = "status";
+  }
+  timedStatusTarget = target;
+  target.textContent = message;
+  target.className = `status${type ? ` ${type}` : ""}`;
+  statusHideTimeout = window.setTimeout(() => {
+    if (timedStatusTarget === target) {
+      target.textContent = "";
+      target.className = "status";
+      timedStatusTarget = null;
+    }
+  }, 5000);
+}
+
+function showSyncStatus(successCount, failureCount, emptyFeedCount) {
+  const feedLabel = (count) => `${count} feed${count === 1 ? "" : "s"}`;
+  const details = [`${feedLabel(successCount)} succeeded`, `${feedLabel(failureCount)} failed`];
+  if (emptyFeedCount) {
+    details.push(`${feedLabel(emptyFeedCount)} returned no articles; saved stories were kept`);
+  }
+  const target = settingsPageOpen ? settingsStatus : statusElement;
+  setTimedStatus(target, `Sync complete: ${details.join(". ")}.`, failureCount ? "error" : "success");
 }
 
 function validFeedUrl(value) {
@@ -722,8 +759,26 @@ function updateRetentionPreview() {
 function openSettings() {
   retentionSelect.value = String(state.retentionMonths);
   updateRetentionPreview();
+  settingsStatus.textContent = "";
+  settingsStatus.className = "status";
   setSidebarOpen(false);
-  settingsDialog.showModal();
+  pushAppViewHistory("settings");
+  settingsPageOpen = true;
+  storiesView.hidden = true;
+  readerView.hidden = true;
+  settingsView.hidden = false;
+  setReaderHeader(true);
+  backButton.focus();
+}
+
+function closeSettingsPage() {
+  settingsPageOpen = false;
+  activeAppViewHistoryId = "";
+  settingsView.hidden = true;
+  storiesView.hidden = false;
+  setReaderHeader(false);
+  window.scrollTo(0, 0);
+  menuToggle.focus();
 }
 
 function saveRetentionSetting() {
@@ -746,7 +801,6 @@ function saveRetentionSetting() {
   const removedCount = removeExpiredReadStories(months);
   saveState();
   render();
-  settingsDialog.close();
   showStatus(removedCount
     ? `Removed ${removedCount} old read stor${removedCount === 1 ? "y" : "ies"}.`
     : "Reading settings saved.", "success");
@@ -754,8 +808,8 @@ function saveRetentionSetting() {
 
 function updateThemeToggle() {
   const darkMode = state.theme === "dark";
-  themeToggle.querySelector("span").textContent = darkMode ? "Light mode" : "Dark mode";
-  themeToggle.setAttribute("aria-label", `Switch to ${darkMode ? "light" : "dark"} mode`);
+  themeToggle.querySelector("span").textContent = darkMode ? "Switch to light mode" : "Switch to dark mode";
+  themeToggle.setAttribute("aria-label", darkMode ? "Switch to light mode" : "Switch to dark mode");
   themeColorMeta.content = darkMode ? "#151a17" : "#f5f3ee";
 }
 
@@ -1041,13 +1095,12 @@ function render() {
         ? state.stories.filter((story) => folderFeedUrls.has(story.feedUrl))
         : state.stories;
   const unreadStoriesInView = storiesByView.filter((story) => story.read !== true);
-  markAllReadButton.hidden = unreadStoriesInView.length === 0;
+  unreadStoriesInCurrentView = unreadStoriesInView.length;
+  updateMarkAllReadVisibility();
   const visibleStories = storiesByView.filter((story) =>
     storyFilter === "all" || (storyFilter === "read" ? story.read === true : story.read !== true),
   );
-  storyFilterButtons.forEach((button) => {
-    button.setAttribute("aria-pressed", String(button.dataset.storyFilter === storyFilter));
-  });
+  storyFilterSelect.value = storyFilter;
   const sortedStories = [...visibleStories].sort((a, b) => {
     const dateA = Date.parse(a.date) || 0;
     const dateB = Date.parse(b.date) || 0;
@@ -1151,6 +1204,7 @@ function render() {
     main.append(copy);
     const thumbnailUrl = safeImageUrl(story.image);
     if (thumbnailUrl) {
+      main.classList.add("has-thumbnail");
       const thumbnail = document.createElement("img");
       thumbnail.className = "story-thumbnail";
       thumbnail.src = thumbnailUrl;
@@ -1271,7 +1325,6 @@ function markAllUnreadAsRead() {
   });
   saveState();
   render();
-  showStatus(`Marked ${unreadStories.length} unread stor${unreadStories.length === 1 ? "y" : "ies"} as read.`, "success");
 }
 
 function selectStoryFilter(filter) {
@@ -1290,47 +1343,74 @@ function setSidebarOpen(isOpen) {
   menuToggle.setAttribute("aria-label", isOpen ? "Close feed menu" : "Open feed menu");
   document.body.classList.toggle("sidebar-open", isOpen);
   if (isOpen) closeSidebarButton.focus();
-  else menuToggle.focus();
+  else menuToggle.focus({ preventScroll: true });
+}
+
+function setReaderHeader(isReading) {
+  menuToggle.hidden = isReading;
+  backButton.hidden = !isReading;
+  updateMarkAllReadVisibility();
+}
+
+function updateMarkAllReadVisibility() {
+  markAllReadButton.hidden = unreadStoriesInCurrentView === 0 || !readerView.hidden || settingsPageOpen;
+}
+
+function pushAppViewHistory(view) {
+  const previousState = history.state && typeof history.state === "object"
+    ? history.state
+    : {};
+  activeAppViewHistoryId = `${view}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  history.pushState({
+    ...previousState,
+    [APP_VIEW_HISTORY_KEY]: { id: activeAppViewHistoryId, view },
+  }, "", location.href);
 }
 
 function selectFeed(feedUrl) {
+  settingsPageOpen = false;
   showingBookmarks = false;
   selectedFeedUrl = feedUrl;
   selectedFolderId = "";
   storyRenderLimit = STORY_RENDER_BATCH_SIZE;
+  setReaderHeader(false);
   readerView.hidden = true;
   storiesView.hidden = false;
   setSidebarOpen(false);
   render();
-  window.scrollTo(0, 0);
 }
 
 function selectFolder(folderId) {
   if (!state.folders.some((folder) => folder.id === folderId)) return;
+  settingsPageOpen = false;
   showingBookmarks = false;
   selectedFeedUrl = "";
   selectedFolderId = folderId;
   storyRenderLimit = STORY_RENDER_BATCH_SIZE;
+  setReaderHeader(false);
   readerView.hidden = true;
   storiesView.hidden = false;
   setSidebarOpen(false);
   render();
-  window.scrollTo(0, 0);
 }
 
 function selectBookmarks() {
+  settingsPageOpen = false;
   showingBookmarks = true;
   selectedFeedUrl = "";
   selectedFolderId = "";
   storyRenderLimit = STORY_RENDER_BATCH_SIZE;
+  setReaderHeader(false);
   readerView.hidden = true;
   storiesView.hidden = false;
   setSidebarOpen(false);
   render();
-  window.scrollTo(0, 0);
 }
 
 async function openStory(story) {
+  storyListScrollPosition = window.scrollY;
+  settingsPageOpen = false;
+  pushAppViewHistory("reader");
   markStoryRead(story, false);
   const requestId = ++articleRequestId;
   openStoryId = story.id;
@@ -1355,7 +1435,9 @@ async function openStory(story) {
   renderedArticleImages = new Set();
   storiesView.hidden = true;
   readerView.hidden = false;
+  setReaderHeader(true);
   window.scrollTo(0, 0);
+  backButton.focus();
 
   const videoId = youtubeVideoId(story);
   const bilibiliVideo = bilibiliVideoParams(story);
@@ -1660,11 +1742,33 @@ function appendMarkdownArticle(markdown) {
 function closeStory() {
   articleRequestId += 1;
   openStoryId = "";
+  activeAppViewHistoryId = "";
+  setReaderHeader(false);
   readerView.hidden = true;
   storiesView.hidden = false;
   render();
-  window.scrollTo(0, 0);
+  requestAnimationFrame(() => window.scrollTo(0, storyListScrollPosition));
+  menuToggle.focus({ preventScroll: true });
 }
+
+function goBackFromAppView() {
+  if (activeAppViewHistoryId && history.state?.[APP_VIEW_HISTORY_KEY]?.id === activeAppViewHistoryId) {
+    history.back();
+  } else if (settingsPageOpen) {
+    closeSettingsPage();
+  } else {
+    closeStory();
+  }
+}
+
+window.addEventListener("popstate", (event) => {
+  const historyId = event.state?.[APP_VIEW_HISTORY_KEY]?.id;
+  if (settingsPageOpen && historyId !== activeAppViewHistoryId) {
+    closeSettingsPage();
+  } else if (!readerView.hidden && historyId !== activeAppViewHistoryId) {
+    closeStory();
+  }
+});
 
 function removeFeed(feedUrl) {
   state.feeds = state.feeds.filter((feed) => feed.url !== feedUrl);
@@ -1687,7 +1791,8 @@ async function addFeed(value) {
 
   const submitButton = form.querySelector("button[type='submit']");
   submitButton.disabled = true;
-  showStatus("Finding your stories…");
+  dialogStatusElement.textContent = "Finding your stories…";
+  dialogStatusElement.className = "status";
   try {
     const result = await fetchFeed(feedInputValue);
     if (state.feeds.some((feed) => feed.url === result.feed.url)) {
@@ -1703,7 +1808,6 @@ async function addFeed(value) {
     render();
     feedInput.value = "";
     addDialog.close();
-    showStatus(`Added ${result.feed.title}.`, "success");
   } catch (error) {
     console.error(`Could not load feed ${feedInputValue}.`, error);
     showStatus(`${error.message} The feed may be unavailable or the feed service may be busy.`, "error");
@@ -1715,30 +1819,25 @@ async function addFeed(value) {
 async function refreshFeeds() {
   if (isRefreshing) return;
   const refreshableFeeds = state.feeds.filter((feed) => validFeedUrl(feed.url));
-  if (refreshableFeeds.length === 0) {
-    showStatus(state.feeds.length
-      ? "Your saved JSON stories are up to date."
-      : "Add a feed before refreshing.", state.feeds.length ? "success" : "");
-    return;
-  }
+  if (refreshableFeeds.length === 0) return;
   isRefreshing = true;
   refreshButton.disabled = true;
   refreshButton.classList.add("is-refreshing");
-  showStatus("Refreshing your feeds…");
   try {
     const failures = [];
     const emptyFeeds = [];
     const previousStories = new Map(state.stories.map((story) => [story.id, story]));
     const successfulUpdates = new Map();
+    let successfulCount = 0;
     for (let start = 0; start < refreshableFeeds.length; start += MAX_PARALLEL_FEED_REFRESHES) {
       const batch = refreshableFeeds.slice(start, start + MAX_PARALLEL_FEED_REFRESHES);
-      showStatus(`Refreshing feeds ${Math.min(start + batch.length, refreshableFeeds.length)} of ${refreshableFeeds.length}…`);
       const results = await Promise.allSettled(batch.map((feed) => fetchFeed(feed.url)));
       results.forEach((result) => {
         if (result.status === "rejected") {
           failures.push(result.reason);
           return;
         }
+        successfulCount += 1;
         const { feed, stories } = result.value;
         if (stories.length === 0) emptyFeeds.push(feed.title);
         const refreshedStories = stories.map((story) => {
@@ -1777,22 +1876,10 @@ async function refreshFeeds() {
     state.stories = refreshedStateStories;
     saveState();
     render();
-    const statusMessages = [];
-    if (emptyFeeds.length) {
-      statusMessages.push(
-        `No articles were updated for ${emptyFeeds.length} feed${emptyFeeds.length === 1 ? "" : "s"} because they returned no articles; saved stories were kept.`,
-      );
-    }
     if (failures.length) {
       failures.forEach((error) => console.error("Could not refresh a feed.", error));
-      statusMessages.push(
-        `${failures.length} feed${failures.length === 1 ? "" : "s"} could not be refreshed; saved stories are still shown.`,
-      );
     }
-    showStatus(
-      statusMessages.length ? statusMessages.join(" ") : "All feeds are up to date.",
-      failures.length ? "error" : "success",
-    );
+    showSyncStatus(successfulCount, failures.length, emptyFeeds.length);
   } finally {
     isRefreshing = false;
     refreshButton.disabled = false;
@@ -1867,9 +1954,7 @@ form.addEventListener("submit", (event) => {
   event.preventDefault();
   addFeed(feedInput.value);
 });
-storyFilterButtons.forEach((button) => {
-  button.addEventListener("click", () => selectStoryFilter(button.dataset.storyFilter));
-});
+storyFilterSelect.addEventListener("change", () => selectStoryFilter(storyFilterSelect.value));
 markAllReadButton.addEventListener("click", markAllUnreadAsRead);
 loadMoreStoriesButton.addEventListener("click", () => {
   storyRenderLimit += STORY_RENDER_BATCH_SIZE;
@@ -1887,7 +1972,9 @@ document.addEventListener("touchstart", handlePullStart, { passive: true });
 document.addEventListener("touchmove", handlePullMove, { passive: false });
 document.addEventListener("touchend", handlePullEnd, { passive: true });
 document.addEventListener("touchcancel", resetPullRefresh, { passive: true });
-backButton.addEventListener("click", closeStory);
+backButton.addEventListener("click", () => {
+  goBackFromAppView();
+});
 closeImageDialogButton.addEventListener("click", closeImageZoom);
 imageDialog.addEventListener("click", (event) => {
   if (event.target === imageDialog) closeImageZoom();
@@ -1926,14 +2013,6 @@ addFolderForm.addEventListener("submit", (event) => {
 });
 retentionSelect.addEventListener("change", updateRetentionPreview);
 saveSettingsButton.addEventListener("click", saveRetentionSetting);
-closeSettingsButton.addEventListener("click", () => settingsDialog.close());
-settingsDialog.addEventListener("click", (event) => {
-  if (event.target === settingsDialog) settingsDialog.close();
-});
-settingsDialog.addEventListener("cancel", (event) => {
-  event.preventDefault();
-  settingsDialog.close();
-});
 readerBookmarkToggle.addEventListener("click", () => {
   const story = state.stories.find((candidate) => candidate.id === openStoryId);
   if (story) toggleBookmark(story);
@@ -1960,7 +2039,6 @@ addDialog.addEventListener("close", () => {
   addToggle.setAttribute("aria-expanded", "false");
   addToggle.focus();
 });
-window.addEventListener("online", () => showStatus("You’re back online.", "success"));
 window.addEventListener("offline", () => {
   showStatus("You’re offline. Saved stories are still available.", "error");
 });

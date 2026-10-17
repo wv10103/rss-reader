@@ -13,28 +13,28 @@
   <body>
     <div class="app-shell">
       <header class="topbar">
+        <button class="icon-button header-back-button" id="back-button" type="button" aria-label="Back to stories" title="Back to stories" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6M9 12h11"/></svg>
+        </button>
         <button class="icon-button menu-toggle" id="menu-toggle" type="button" aria-label="Open feed menu" aria-expanded="false" aria-controls="feed-sidebar">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
         </button>
-        <div class="story-filters" role="group" aria-label="Filter stories by read status">
-          <button class="story-filter" type="button" data-story-filter="unread" aria-pressed="true">
-            <span>Unread</span>
-            <span id="unread-count" class="unread-count" aria-label="Unread stories">0</span>
-          </button>
-          <button class="story-filter" type="button" data-story-filter="all" aria-pressed="false">All</button>
-          <button class="story-filter" type="button" data-story-filter="read" aria-pressed="false">Read</button>
+        <div class="story-filter-control">
+          <label class="sr-only" for="story-filter">Filter stories by read status</label>
+          <select id="story-filter" class="story-filter-select">
+            <option value="unread">Unread</option>
+            <option value="all">All</option>
+            <option value="read">Read</option>
+          </select>
+          <span id="unread-count" class="unread-count" aria-label="Unread stories">0</span>
         </div>
         <div class="header-actions">
+          <button class="icon-button mark-all-read" id="mark-all-read" type="button" aria-label="Mark all unread stories in this view as read" title="Mark all unread stories in this view as read" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 6h10M10 12h10M10 18h10M4 6l1.5 1.5L8 5M4 12l1.5 1.5L8 11M4 18l1.5 1.5L8 17"/></svg>
+          </button>
           <button class="icon-button data-action" id="refresh-button" type="button" aria-label="Refresh feeds" title="Refresh feeds">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.6 9A7 7 0 0 1 18 6l2 2M4 16l2 2a7 7 0 0 0 12.4-3"/></svg>
           </button>
-          <button class="icon-button data-action" id="export-button" type="button" aria-label="Export OPML subscriptions" title="Export OPML subscriptions">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>
-          </button>
-          <button class="icon-button data-action" id="import-button" type="button" aria-label="Import OPML subscriptions" title="Import OPML subscriptions">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9v12m0 0l4.5-4.5M12 21l-4.5-4.5M5 10V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v5"/></svg>
-          </button>
-          <input id="import-file" type="file" accept=".opml,.xml,text/xml,application/xml" hidden>
           <button class="icon-button add-toggle" id="add-toggle" type="button" aria-label="Add a feed" aria-haspopup="dialog" aria-controls="add-feed-dialog" title="Add a feed">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
           </button>
@@ -63,10 +63,6 @@
           <button id="settings-button" class="nav-item settings-item" type="button">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/><path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.7a8 8 0 0 1-1.5.9l-.3 1.8h-2.8l-.3-1.8a8 8 0 0 1-1.5-.9l-1.7.7-1.4-2.4 1.4-1.1a8 8 0 0 1 0-1.8l-1.4-1.1 1.4-2.4 1.7.7a8 8 0 0 1 1.5-.9l.3-1.8h2.8l.3 1.8a8 8 0 0 1 1.5.9l1.7-.7 1.4 2.4-1.4 1.1a8 8 0 0 1 0 1.8Z" transform="translate(-1 -2)"/></svg>
             <span>Settings</span>
-          </button>
-          <button id="theme-toggle" class="nav-item theme-item" type="button" aria-label="Switch to dark mode">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.2 15.3A8.5 8.5 0 0 1 8.7 3.8 8.5 8.5 0 1 0 20.2 15.3Z"/></svg>
-            <span>Dark mode</span>
           </button>
           <div class="sidebar-section-heading">
             <span class="sidebar-section-label">Feeds</span>
@@ -99,24 +95,6 @@
           </form>
         </dialog>
 
-        <dialog id="settings-dialog" class="settings-dialog" aria-labelledby="settings-title">
-          <div class="dialog-heading">
-            <h2 id="settings-title">Reading settings</h2>
-            <button id="close-settings" class="dialog-close" type="button" aria-label="Close settings">×</button>
-          </div>
-          <label class="settings-label" for="retention-months">Keep read stories for</label>
-          <select id="retention-months" class="settings-select">
-            <option value="1">1 month</option>
-            <option value="3">3 months</option>
-            <option value="6">6 months</option>
-            <option value="12">12 months</option>
-            <option value="all">Keep all</option>
-          </select>
-          <p class="settings-help">Older read stories can be removed when you refresh. Unread and bookmarked stories are always kept.</p>
-          <p id="retention-preview" class="settings-preview" aria-live="polite"></p>
-          <button id="save-settings" class="settings-save" type="button">Save setting</button>
-        </dialog>
-
         <dialog id="image-dialog" class="image-dialog" aria-label="Image preview">
           <button id="close-image-dialog" class="dialog-close image-dialog-close" type="button" aria-label="Close image">×</button>
           <img id="zoomed-image" alt="">
@@ -124,7 +102,6 @@
 
         <section id="reader-view" class="reader-view" aria-labelledby="reader-title" hidden>
           <div class="reader-actions">
-            <button id="back-button" class="back-button" type="button">← Back to stories</button>
             <button id="reader-bookmark-toggle" class="bookmark-toggle reader-bookmark-toggle" type="button" aria-pressed="false">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z"/></svg>
               <span>Bookmark</span>
@@ -138,10 +115,45 @@
           </article>
         </section>
 
+        <section id="settings-view" class="settings-view" aria-labelledby="settings-title" hidden>
+          <h1 id="settings-title" class="settings-page-title">Settings</h1>
+          <div id="settings-status" class="status" role="status" aria-live="polite"></div>
+          <section class="settings-card" aria-labelledby="appearance-settings-title">
+            <h2 id="appearance-settings-title">Appearance</h2>
+            <p class="settings-help">Choose how the reader looks on this device.</p>
+            <button id="theme-toggle" class="settings-theme-toggle" type="button" aria-label="Switch to dark mode">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.2 15.3A8.5 8.5 0 0 1 8.7 3.8 8.5 8.5 0 1 0 20.2 15.3Z"/></svg>
+              <span>Dark mode</span>
+            </button>
+          </section>
+          <section class="settings-card" aria-labelledby="reading-settings-title">
+            <h2 id="reading-settings-title">Reading</h2>
+            <label class="settings-label" for="retention-months">Keep read stories for</label>
+            <select id="retention-months" class="settings-select">
+              <option value="1">1 month</option>
+              <option value="3">3 months</option>
+              <option value="6">6 months</option>
+              <option value="12">12 months</option>
+              <option value="all">Keep all</option>
+            </select>
+            <p class="settings-help">Older read stories can be removed when you refresh. Unread and bookmarked stories are always kept.</p>
+            <p id="retention-preview" class="settings-preview" aria-live="polite"></p>
+            <button id="save-settings" class="settings-save" type="button">Save setting</button>
+          </section>
+          <section class="settings-card" aria-labelledby="subscription-settings-title">
+            <h2 id="subscription-settings-title">Subscriptions</h2>
+            <p class="settings-help">Import or export your feeds and folders as an OPML file.</p>
+            <div class="settings-actions">
+              <button id="import-button" class="settings-action-button" type="button">Import OPML</button>
+              <button id="export-button" class="settings-action-button" type="button">Export OPML</button>
+            </div>
+            <input id="import-file" type="file" accept=".opml,.xml,text/xml,application/xml" hidden>
+          </section>
+        </section>
+
         <section id="stories-view" class="stories-section" aria-label="Stories">
           <div class="stories-toolbar">
             <div id="status" class="status" role="status" aria-live="polite"></div>
-            <button id="mark-all-read" class="mark-all-read" type="button" title="Mark unread stories in this view as read" hidden>Mark all read</button>
           </div>
           <div id="story-list" class="story-list"></div>
           <button id="load-more-stories" class="load-more-stories" type="button" hidden>Load more stories</button>
