@@ -24,6 +24,8 @@ const cancelAddFolderButton = document.querySelector("#cancel-add-folder");
 const newFolderNameInput = document.querySelector("#new-folder-name");
 const folderCreateStatus = document.querySelector("#folder-create-status");
 const addDialog = document.querySelector("#add-feed-dialog");
+const dialogStatusElement = document.querySelector("#dialog-status");
+const importProgress = document.querySelector("#import-progress");
 const settingsView = document.querySelector("#settings-view");
 const settingsStatus = document.querySelector("#settings-status");
 const retentionSelect = document.querySelector("#retention-months");
@@ -56,7 +58,6 @@ const imageDialog = document.querySelector("#image-dialog");
 const closeImageDialogButton = document.querySelector("#close-image-dialog");
 const zoomedImage = document.querySelector("#zoomed-image");
 const statusElement = document.querySelector("#status");
-const dialogStatusElement = document.querySelector("#dialog-status");
 const pullRefreshIndicator = document.querySelector("#pull-refresh-indicator");
 const pullRefreshLabel = document.querySelector("#pull-refresh-label");
 const themeColorMeta = document.querySelector('meta[name="theme-color"]');
@@ -184,7 +185,7 @@ function exportOpml() {
   link.download = `rss-reader-subscriptions-${new Date().toISOString().slice(0, 10)}.opml`;
   link.click();
   setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-  showStatus(`Exported ${state.feeds.length} feed${state.feeds.length === 1 ? "" : "s"} as OPML.`, "success");
+  setDialogStatus(`Exported ${state.feeds.length} feed${state.feeds.length === 1 ? "" : "s"} as OPML.`, "success");
 }
 
 function parseOpml(value) {
@@ -227,8 +228,17 @@ function parseOpml(value) {
 
 async function importOpml(file) {
   if (!file) return;
+  importButton.disabled = true;
+  exportButton.disabled = true;
+  importProgress.hidden = false;
+  importProgress.value = 5;
+  setDialogStatus("Reading OPML file…");
   try {
+    await new Promise((resolve) => requestAnimationFrame(resolve));
     const imported = parseOpml(await file.text());
+    setDialogStatus(`Found ${imported.feeds.length} feed${imported.feeds.length === 1 ? "" : "s"}. Importing…`);
+    importProgress.value = 25;
+    await new Promise((resolve) => requestAnimationFrame(resolve));
     const folders = [...state.folders];
     const folderIdsByName = new Map(folders.map((folder) => [folder.name.toLocaleLowerCase(), folder.id]));
     const existingFeedUrls = new Set(state.feeds.map((feed) => feed.url));
@@ -244,12 +254,21 @@ async function importOpml(file) {
       return folderId;
     };
     imported.folderNames.forEach(ensureFolder);
-    imported.feeds.forEach((feed) => {
-      if (existingFeedUrls.has(feed.url)) return;
-      const folderId = feed.folderName ? ensureFolder(feed.folderName) : "";
-      newFeeds.push({ url: feed.url, title: feed.title, folderId });
-      existingFeedUrls.add(feed.url);
-    });
+    let skippedCount = 0;
+    for (let index = 0; index < imported.feeds.length; index += 1) {
+      const feed = imported.feeds[index];
+      if (existingFeedUrls.has(feed.url)) skippedCount += 1;
+      else {
+        const folderId = feed.folderName ? ensureFolder(feed.folderName) : "";
+        newFeeds.push({ url: feed.url, title: feed.title, folderId });
+        existingFeedUrls.add(feed.url);
+      }
+      importProgress.value = 25 + Math.round(((index + 1) / imported.feeds.length) * 65);
+      if ((index + 1) % 100 === 0) {
+        setDialogStatus(`Importing feeds… ${index + 1} of ${imported.feeds.length}`);
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      }
+    }
     const mergedState = { ...state, feeds: [...state.feeds, ...newFeeds], folders };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedState));
@@ -259,16 +278,24 @@ async function importOpml(file) {
     }
     state = mergedState;
     render();
-    const skippedCount = imported.feeds.length - newFeeds.length;
-    const resultMessage = `Imported ${newFeeds.length} feed${newFeeds.length === 1 ? "" : "s"}` +
-      (skippedCount ? `; skipped ${skippedCount} already saved.` : ".");
-    showStatus(resultMessage, "success");
+    importProgress.value = 100;
+    const resultMessage = `Import complete: added ${newFeeds.length} feed${newFeeds.length === 1 ? "" : "s"}` +
+      (skippedCount ? `, skipped ${skippedCount} already saved.` : ".");
+    setDialogStatus(resultMessage, "success");
   } catch (error) {
     console.error("Could not import OPML subscriptions.", error);
-    showStatus(error.message, "error");
+    importProgress.hidden = true;
+    setDialogStatus(error.message, "error");
   } finally {
+    importButton.disabled = false;
+    exportButton.disabled = false;
     importFileInput.value = "";
   }
+}
+
+function setDialogStatus(message, type = "") {
+  dialogStatusElement.textContent = message;
+  dialogStatusElement.className = `status${type ? ` ${type}` : ""}`;
 }
 
 function showStatus(message, type = "") {
@@ -466,8 +493,9 @@ async function fetchFeed(value) {
         if (!websiteUrl) throw new Error("Paste a website/feed URL or valid JSON.");
         const youtubeFeedUrl = normalizeYoutubeFeedUrl(websiteUrl);
         if (youtubeFeedUrl) return readYoutubeFeed(youtubeFeedUrl);
-        const bilibiliFeedUrl = normalizeBilibiliFeedUrl(websiteUrl);
-        if (bilibiliFeedUrl) return readBilibiliFeed(bilibiliFeedUrl);
+        if (isBilibiliProfileUrl(websiteUrl)) {
+          throw new Error("Bilibili profile URLs are not RSS feeds. Add a direct RSS/Atom feed URL instead.");
+        }
         return discoverWebsiteFeed(websiteUrl);
       }
       throw error;
@@ -483,13 +511,11 @@ async function fetchFeed(value) {
     return readYoutubeFeed(value);
   }
 
-  const bilibiliFeedUrl = normalizeBilibiliFeedUrl(value);
-  if (bilibiliFeedUrl) {
-    return readBilibiliFeed(bilibiliFeedUrl);
+  if (isBilibiliProfileUrl(value)) {
+    throw new Error("Bilibili profile URLs are not RSS feeds. Add a direct RSS/Atom feed URL instead.");
   }
-
-  if (isBilibiliRssHubFeed(value)) {
-    return readBilibiliFeed(value);
+  if (isLegacyBilibiliRssHubFeed(value)) {
+    throw new Error("This saved Bilibili feed uses RSSHub and is no longer supported. Replace it with a direct RSS/Atom feed URL.");
   }
 
   try {
@@ -499,16 +525,14 @@ async function fetchFeed(value) {
   }
 }
 
-function normalizeBilibiliFeedUrl(value) {
+function isBilibiliProfileUrl(value) {
   try {
     const url = new URL(value);
     const hostname = url.hostname.toLowerCase();
-    if (!["space.bilibili.com", "bilibili.com", "www.bilibili.com"].includes(hostname)) return "";
-    const userMatch = url.pathname.match(/^\/(\d+)(?:\/video)?\/?$/);
-    if (!userMatch) return "";
-    return `${RSSHUB_BASE_URL}/bilibili/user/video/${userMatch[1]}`;
+    if (!["space.bilibili.com", "bilibili.com", "www.bilibili.com"].includes(hostname)) return false;
+    return /^\/\d+(?:\/video)?\/?$/.test(url.pathname);
   } catch {
-    return "";
+    return false;
   }
 }
 
@@ -561,17 +585,14 @@ async function readYoutubeFeed(feedUrl) {
   return result;
 }
 
-function isBilibiliRssHubFeed(value) {
+function isLegacyBilibiliRssHubFeed(value) {
   try {
     const url = new URL(value);
-    return /^\/bilibili\/user\/video\/\d+\/?$/.test(url.pathname);
+    return url.origin === new URL(RSSHUB_BASE_URL).origin &&
+      /^\/bilibili\/user\/video\/\d+\/?$/.test(url.pathname);
   } catch {
     return false;
   }
-}
-
-async function readBilibiliFeed(feedUrl) {
-  return readFeedThroughJsonConverter(feedUrl, "Bilibili");
 }
 
 async function readFeedThroughJsonConverter(feedUrl, platform) {
@@ -658,7 +679,49 @@ async function readRssFeed(feedUrl) {
   if (data?.status !== "ok") {
     throw new Error(typeof data?.message === "string" ? data.message : "The feed service could not read this RSS or Atom feed.");
   }
-  return parseJsonFeed(data, feedUrl);
+  const result = parseJsonFeed(data, feedUrl);
+  if (isAllkpopFeedUrl(feedUrl) && result.stories.some((story) => !story.image)) {
+    try {
+      await addAllkpopFeedImages(result, feedUrl);
+    } catch (error) {
+      console.warn("Could not retrieve Allkpop thumbnail metadata; keeping the feed stories.", error);
+    }
+  }
+  return result;
+}
+
+function isAllkpopFeedUrl(feedUrl) {
+  try {
+    return /(^|\.)allkpop\.com$/i.test(new URL(feedUrl).hostname);
+  } catch {
+    return false;
+  }
+}
+
+async function addAllkpopFeedImages(result, feedUrl) {
+  const proxyUrl = new URL("https://api.allorigins.win/raw");
+  proxyUrl.searchParams.set("url", feedUrl);
+  const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
+  if (!response.ok) {
+    throw new Error(`Allkpop image metadata request failed (${response.status}).`);
+  }
+
+  const xml = new DOMParser().parseFromString(await response.text(), "application/xml");
+  if (xml.querySelector("parsererror")) {
+    throw new Error("Allkpop returned invalid RSS image metadata.");
+  }
+  const imagesByLink = new Map();
+  xml.querySelectorAll("item").forEach((item) => {
+    const link = item.querySelector("link")?.textContent?.trim();
+    const thumbnail = [...item.children].find((child) =>
+      child.localName.toLowerCase() === "thumbnail",
+    )?.textContent?.trim();
+    const image = safeImageUrl(thumbnail, feedUrl);
+    if (link && image) imagesByLink.set(link, image);
+  });
+  result.stories.forEach((story) => {
+    if (!story.image) story.image = imagesByLink.get(story.link) || "";
+  });
 }
 
 async function discoverWebsiteFeed(websiteUrl) {
@@ -2023,6 +2086,8 @@ document.addEventListener("keydown", (event) => {
 addToggle.addEventListener("click", () => {
   dialogStatusElement.textContent = "";
   dialogStatusElement.className = "status";
+  importProgress.hidden = true;
+  importProgress.value = 0;
   addDialog.showModal();
   addToggle.setAttribute("aria-expanded", "true");
   feedInput.focus();

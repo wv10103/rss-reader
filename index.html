@@ -93,6 +93,12 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
             </button>
           </form>
+          <div class="opml-actions" aria-label="Subscription import and export">
+            <button id="import-button" class="settings-action-button" type="button">Import OPML</button>
+            <button id="export-button" class="settings-action-button" type="button">Export OPML</button>
+          </div>
+          <progress id="import-progress" class="import-progress" max="100" value="0" aria-label="OPML import progress" hidden></progress>
+          <input id="import-file" type="file" accept=".opml,.xml,text/xml,application/xml" hidden>
         </dialog>
 
         <dialog id="image-dialog" class="image-dialog" aria-label="Image preview">
@@ -139,15 +145,6 @@
             <p class="settings-help">Older read stories can be removed when you refresh. Unread and bookmarked stories are always kept.</p>
             <p id="retention-preview" class="settings-preview" aria-live="polite"></p>
             <button id="save-settings" class="settings-save" type="button">Save setting</button>
-          </section>
-          <section class="settings-card" aria-labelledby="subscription-settings-title">
-            <h2 id="subscription-settings-title">Subscriptions</h2>
-            <p class="settings-help">Import or export your feeds and folders as an OPML file.</p>
-            <div class="settings-actions">
-              <button id="import-button" class="settings-action-button" type="button">Import OPML</button>
-              <button id="export-button" class="settings-action-button" type="button">Export OPML</button>
-            </div>
-            <input id="import-file" type="file" accept=".opml,.xml,text/xml,application/xml" hidden>
           </section>
         </section>
 
