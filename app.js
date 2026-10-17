@@ -1218,14 +1218,10 @@ function render() {
 
     const meta = document.createElement("div");
     meta.className = "story-meta";
-    const avatar = document.createElement("span");
-    avatar.className = "source-avatar";
-    avatar.setAttribute("aria-hidden", "true");
-    avatar.textContent = feedInitials(story.source || "RSS feed");
     const source = document.createElement("span");
     source.className = "story-source";
     source.textContent = story.source || "RSS feed";
-    meta.append(avatar, source);
+    meta.append(source);
     if (story.read === true) {
       const readLabel = document.createElement("span");
       readLabel.className = "story-read-label";
@@ -1302,11 +1298,6 @@ function render() {
       main.append(thumbnail);
     }
     card.append(meta, main, storyActions);
-    const arrow = document.createElement("span");
-    arrow.className = "story-arrow";
-    arrow.setAttribute("aria-hidden", "true");
-    arrow.textContent = "›";
-    card.append(arrow);
     storyCards.append(card);
   }
   storyList.append(storyCards);

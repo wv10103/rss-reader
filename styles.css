@@ -236,8 +236,8 @@ h2, h3, p { margin-top: 0; }
 .stories-toolbar .status { margin-right: auto; }
 .stories-section { margin: 0; }
 .story-filter-control { display: flex; flex: 0 0 auto; align-items: center; gap: 4px; }
-.story-filter-select { width: 92px; min-height: 34px; padding: 0 7px; border: 1px solid var(--line); border-radius: 10px; color: #59665c; background: var(--surface); font-size: 11px; font-weight: 600; }
-.story-filter-select:focus-visible { outline: 3px solid rgba(73, 116, 84, .24); outline-offset: 2px; }
+.story-filter-select { appearance: auto; width: 92px; min-height: 34px; padding: 0 4px; border: 1px solid var(--line); border-radius: 4px; color: #59665c; background: var(--surface); color-scheme: light; font: menu; }
+.story-filter-select:focus-visible { outline: auto; outline-offset: 1px; }
 .unread-count { display: inline-grid; min-width: 18px; height: 18px; place-items: center; padding: 0 4px; border-radius: 999px; color: var(--green-dark); background: var(--green-soft); font-size: 10px; line-height: 1; }
 .story-list { display: grid; gap: 12px; }
 .load-more-stories { display: block; min-height: 42px; margin: 20px auto 0; padding: 0 18px; border: 1px solid var(--line); border-radius: 999px; color: var(--green-dark); background: var(--surface); font-size: 12px; font-weight: 700; cursor: pointer; }
@@ -272,19 +272,16 @@ h2, h3, p { margin-top: 0; }
 .story-read-toggle svg { width: 17px; height: 17px; }
 .story-read-toggle[aria-pressed="true"] svg { fill: none; }
 .story-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; color: var(--muted); font-size: 11px; }
-.source-avatar { display: grid; width: 25px; height: 25px; flex: 0 0 auto; place-items: center; border-radius: 9px; color: var(--green-dark); background: var(--green-soft); font-size: 9px; font-weight: 700; letter-spacing: .2px; }
 .story-source { overflow: hidden; max-width: min(55%, 280px); color: #526258; font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .story-read-label { padding: 3px 7px; border-radius: 999px; color: #6c776e; background: #eef1ee; font-size: 10px; }
 .meta-dot { color: #bdc5bf; }
 .story-title { margin: 0 0 6px; font: 700 17px/1.42 "Manrope", sans-serif; letter-spacing: -.35px; }
 .story-summary { display: -webkit-box; overflow: hidden; max-width: 650px; margin: 0; color: #727d75; font-size: 13px; line-height: 1.65; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .story-main { display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; gap: 20px; }
-.story-main.has-thumbnail { grid-template-columns: minmax(0, 1fr) 220px; }
+.story-main.has-thumbnail { grid-template-columns: minmax(0, 1fr) 280px; }
 .story-copy { min-width: 0; }
-.story-thumbnail { display: block; width: 220px; height: 145px; border-radius: 10px; background: #edf1ed; object-fit: cover; cursor: zoom-in; }
+.story-thumbnail { display: block; width: 280px; height: 184px; border-radius: 10px; background: #edf1ed; object-fit: cover; cursor: zoom-in; transform: translateX(52px); }
 .story-thumbnail:focus-visible { outline: 3px solid rgba(73, 116, 84, .35); outline-offset: 3px; }
-.story-arrow { position: absolute; top: 50%; right: 23px; color: #9aa69d; font-size: 18px; opacity: 0; transform: translate(-4px, -50%); transition: opacity .18s, transform .18s; }
-.story-card:focus-visible .story-arrow { opacity: 1; transform: translate(0, -50%); }
 .story-card { touch-action: pan-y; }
 
 .reader-view { max-width: 680px; margin: 0 auto; padding: 8px 0 40px; }
@@ -343,9 +340,8 @@ h2, h3, p { margin-top: 0; }
   .story-title { font-size: 15px; }
   .story-summary { font-size: 12px; }
   .story-main { gap: 12px; }
-  .story-main.has-thumbnail { grid-template-columns: minmax(0, 1fr) 128px; }
-  .story-thumbnail { width: 128px; height: 96px; border-radius: 8px; }
-  .story-arrow { right: 15px; opacity: .7; transform: translate(0, -50%); }
+  .story-main.has-thumbnail { grid-template-columns: minmax(0, 1fr) 150px; }
+  .story-thumbnail { width: 150px; height: 113px; border-radius: 8px; transform: translateX(32px); }
   .reader-view { padding-top: 3px; }
   .reader-actions { margin-bottom: 26px; }
   .reader-title { letter-spacing: -.8px; }
@@ -361,8 +357,8 @@ h2, h3, p { margin-top: 0; }
   .topbar .icon-button svg { width: 15px; height: 15px; }
   .story-filter-select { width: 74px; min-height: 27px; padding: 0 2px; font-size: 9px; }
   .unread-count { min-width: 13px; height: 13px; padding: 0 2px; font-size: 8px; }
-  .story-main.has-thumbnail { grid-template-columns: minmax(0, 1fr) 116px; }
-  .story-thumbnail { width: 116px; height: 87px; }
+  .story-main.has-thumbnail { grid-template-columns: minmax(0, 1fr) 130px; }
+  .story-thumbnail { width: 130px; height: 98px; transform: translateX(28px); }
   .back-to-top { right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); width: 48px; height: 48px; }
 }
 
@@ -457,7 +453,6 @@ h2, h3, p { margin-top: 0; }
 :root[data-theme="dark"] .story-read-label { color: #c0cbc2; background: #343d36; }
 :root[data-theme="dark"] .story-thumbnail,
 :root[data-theme="dark"] .image-zoom-trigger img,
-:root[data-theme="dark"] .source-avatar { background: #303a33; }
 :root[data-theme="dark"] .empty-state { color: #a0aca3; }
 :root[data-theme="dark"] .empty-state svg { border-color: #3a483d; background: #293b2e; }
 :root[data-theme="dark"] .status.success { color: #a6d1af; }
@@ -470,7 +465,7 @@ h2, h3, p { margin-top: 0; }
 :root[data-theme="dark"] .pull-refresh-indicator { color: #c0cbc2; background: #252d27; }
 :root[data-theme="dark"] .status { color: #a0aca3; }
 :root[data-theme="dark"] .status.error { color: #f0a69d; }
-:root[data-theme="dark"] .story-filter-select { color: var(--ink); border-color: var(--line); background: #252d27; }
+:root[data-theme="dark"] .story-filter-select { color: var(--ink); border-color: var(--line); background: #252d27; color-scheme: dark; }
 :root[data-theme="dark"] .mark-all-read { color: #c0e0c7; }
 :root[data-theme="dark"] .load-more-stories { color: var(--ink); border-color: var(--line); background: #252d27; }
 :root[data-theme="dark"] .load-more-stories:hover { border-color: #506153; background: #2e3931; }
