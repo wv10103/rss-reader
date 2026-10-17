@@ -1245,6 +1245,15 @@ function render() {
     const title = document.createElement("h3");
     title.className = "story-title";
     title.textContent = story.title;
+    const storyActions = document.createElement("div");
+    storyActions.className = "story-actions";
+    const readToggle = createReadToggle(story);
+    readToggle.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleStoryRead(story);
+    });
+    readToggle.addEventListener("keydown", (event) => event.stopPropagation());
     const bookmarkToggle = createBookmarkToggle(story);
     bookmarkToggle.classList.add("story-bookmark-toggle");
     bookmarkToggle.addEventListener("click", (event) => {
@@ -1253,6 +1262,7 @@ function render() {
       toggleBookmark(story);
     });
     bookmarkToggle.addEventListener("keydown", (event) => event.stopPropagation());
+    storyActions.append(readToggle, bookmarkToggle);
     const main = document.createElement("div");
     main.className = "story-main";
     const copy = document.createElement("div");
@@ -1291,7 +1301,7 @@ function render() {
       thumbnail.addEventListener("error", () => thumbnail.remove(), { once: true });
       main.append(thumbnail);
     }
-    card.append(meta, main, bookmarkToggle);
+    card.append(meta, main, storyActions);
     const arrow = document.createElement("span");
     arrow.className = "story-arrow";
     arrow.setAttribute("aria-hidden", "true");
@@ -1342,6 +1352,17 @@ function createBookmarkToggle(story) {
   return button;
 }
 
+function createReadToggle(story) {
+  const button = document.createElement("button");
+  button.className = "bookmark-toggle story-read-toggle";
+  button.type = "button";
+  button.setAttribute("aria-pressed", String(story.read === true));
+  button.setAttribute("aria-label", story.read === true ? "Mark as unread" : "Mark as read");
+  button.title = story.read === true ? "Mark as unread" : "Mark as read";
+  button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>';
+  return button;
+}
+
 function updateReaderBookmark(story) {
   const button = createBookmarkToggle(story);
   readerBookmarkToggle.setAttribute("aria-pressed", button.getAttribute("aria-pressed"));
@@ -1366,6 +1387,14 @@ function markStoryRead(story, shouldRender = true) {
   saveState();
   if (shouldRender) render();
   else updateUnreadCount();
+}
+
+function toggleStoryRead(story) {
+  const savedStory = state.stories.find((candidate) => candidate.id === story.id);
+  if (!savedStory) return;
+  savedStory.read = savedStory.read !== true;
+  saveState();
+  render();
 }
 
 function markAllUnreadAsRead() {

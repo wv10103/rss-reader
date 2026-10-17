@@ -248,7 +248,7 @@ h2, h3, p { margin-top: 0; }
   position: relative;
   display: block;
   width: 100%;
-  padding: 21px 54px 21px 23px;
+  padding: 21px 94px 21px 23px;
   border: 1px solid rgba(43, 62, 47, .075);
   border-radius: 15px;
   color: inherit;
@@ -266,8 +266,11 @@ h2, h3, p { margin-top: 0; }
 .bookmark-toggle svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
 .bookmark-toggle[aria-pressed="true"] svg { fill: currentColor; }
 .bookmark-toggle:focus-visible { outline: 3px solid rgba(73, 116, 84, .24); outline-offset: 2px; }
-.story-bookmark-toggle { position: absolute; top: 13px; right: 14px; width: 32px; height: 32px; }
+.story-actions { position: absolute; top: 13px; right: 14px; display: flex; gap: 6px; }
+.story-actions .bookmark-toggle { width: 32px; height: 32px; }
 .story-bookmark-toggle svg { width: 16px; height: 16px; }
+.story-read-toggle svg { width: 17px; height: 17px; }
+.story-read-toggle[aria-pressed="true"] svg { fill: none; }
 .story-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; color: var(--muted); font-size: 11px; }
 .source-avatar { display: grid; width: 25px; height: 25px; flex: 0 0 auto; place-items: center; border-radius: 9px; color: var(--green-dark); background: var(--green-soft); font-size: 9px; font-weight: 700; letter-spacing: .2px; }
 .story-source { overflow: hidden; max-width: min(55%, 280px); color: #526258; font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
@@ -336,7 +339,7 @@ h2, h3, p { margin-top: 0; }
   main { min-height: calc(100vh - 68px); padding: 20px 0 42px; }
   .add-dialog { padding: 21px 17px; border-radius: 17px; }
   .story-list { gap: 9px; }
-  .story-card { padding: 17px 39px 17px 16px; border-radius: 13px; }
+  .story-card { padding: 17px 82px 17px 16px; border-radius: 13px; }
   .story-title { font-size: 15px; }
   .story-summary { font-size: 12px; }
   .story-main { gap: 12px; }
